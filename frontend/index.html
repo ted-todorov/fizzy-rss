@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fizzy RSS</title>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Fizzy">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="theme-color" content="#1a1a1a">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f9f9f9;
+      --surface: #ffffff;
+      --border: #e0e0e0;
+      --text: #1a1a1a;
+      --muted: #666;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --read-bg: #f5f5f5;
+      --toast-bg: #1a1a1a;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111;
+        --surface: #1e1e1e;
+        --border: #333;
+        --text: #f0f0f0;
+        --muted: #999;
+        --accent: #60a5fa;
+        --accent-hover: #93c5fd;
+        --read-bg: #2a2a2a;
+        --toast-bg: #f0f0f0;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-main {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-main h1 { font-size: 1.2rem; font-weight: 700; flex: 1; }
+
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      padding: 0 12px 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
+
+    .tab-btn {
+      padding: 6px 18px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      min-height: 34px;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .btn {
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.85rem;
+      min-height: 40px;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--bg); }
+    .btn.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn.primary:hover { background: var(--accent-hover); }
+    .btn.icon { padding: 8px 10px; font-size: 1rem; }
+    .btn.danger { color: #c0392b; border-color: #e0b0a0; }
+    .btn.danger:hover { background: #fff5f5; }
+
+    .toggle { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; }
+    .toggle input { width: 18px; height: 18px; cursor: pointer; }
+
+    main { max-width: 800px; margin: 0 auto; padding: 12px 16px; }
+
+    .view-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .taste-strip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .taste-strip strong { color: var(--text); margin-right: 8px; }
+    .taste-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .taste-tag {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 0.75rem;
+    }
+
+    .article-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .article {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .article.read { background: var(--read-bg); }
+    .article.newsletter { border-left: 3px solid #9B59B6; }
+
+    .newsletter-badge {
+      font-size: 11px;
+      color: #9B59B6;
+    }
+
+    .article-header {
+      padding: 12px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .article-header:hover { background: var(--bg); }
+
+    .article-meta { flex: 1; min-width: 0; }
+    .article-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    .article.read .article-title { color: var(--muted); font-weight: 400; }
+    .article-feed { font-size: 0.75rem; color: var(--muted); margin-top: 3px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .article-date { font-size: 0.75rem; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+
+    .read-badge {
+      font-size: 0.68rem;
+      color: var(--muted);
+      background: var(--border);
+      border-radius: 10px;
+      padding: 1px 7px;
+    }
+
+    /* Thumbnails */
+    .thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: 6px;
+      flex-shrink: 0;
+      object-fit: cover;
+      display: block;
+    }
+    .thumb-fallback {
+      width: 48px;
+      height: 48px;
+      border-radius: 6px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #fff;
+      user-select: none;
+    }
+
+    .article-body { padding: 0 16px 14px; border-top: 1px solid var(--border); }
+
+    .summary-box {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 12px 0;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .summary-box.loading { color: var(--muted); font-style: italic; }
+    .summary-label { font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+
+    .content-preview {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 12px;
+      max-height: 120px;
+      overflow: hidden;
+      -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent);
+      mask-image: linear-gradient(to bottom, black 60%, transparent);
+    }
+
+    .article-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .status-bar {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--toast-bg);
+      color: var(--bg);
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 0.875rem;
+      z-index: 200;
+      pointer-events: none;
+      animation: fadeInOut 2.5s ease forwards;
+    }
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+      15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      75% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* Stats view */
+    .stats-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .stats-card h3 {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 14px;
+    }
+    .stats-row { display: flex; gap: 8px; }
+    .stat-block { flex: 1; text-align: center; padding: 8px; background: var(--bg); border-radius: 8px; }
+    .stat-value { font-size: 1.6rem; font-weight: 700; }
+    .stat-label { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+    .taste-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+    .taste-bar-label { font-size: 0.78rem; width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+    .taste-bar-track { flex: 1; height: 7px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .taste-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
+    .taste-bar-value { font-size: 0.72rem; color: var(--muted); width: 28px; text-align: right; flex-shrink: 0; }
+
+    .feed-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .feed-row:last-child { border-bottom: none; }
+    .feed-unread {
+      font-size: 0.72rem;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 10px;
+      padding: 2px 8px;
+      flex-shrink: 0;
+    }
+    .feed-zero { font-size: 0.72rem; color: var(--muted); }
+
+    /* Digest card v2 */
+    .digest-card-v2 {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .digest-header {
+      background: rgba(255,149,0,0.12);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #c85a00;
+      letter-spacing: 0.04em;
+    }
+    @media (prefers-color-scheme: dark) {
+      .digest-header { background: rgba(255,149,0,0.2); color: #ff9500; }
+    }
+    .digest-refresh-btn {
+      background: transparent;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      line-height: 1;
+      opacity: 0.8;
+    }
+    .digest-refresh-btn:hover { opacity: 1; background: rgba(255,149,0,0.15); }
+    .digest-refresh-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .digest-section { padding: 12px 14px 4px; }
+    .digest-section-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .digest-pick-card {
+      padding: 10px 12px;
+      background: var(--bg);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .digest-pick-card:hover { background: var(--border); }
+    .digest-pick-title { font-size: 0.88rem; font-weight: 700; line-height: 1.35; margin-bottom: 3px; }
+    .digest-pick-source { font-size: 0.7rem; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .digest-pick-summary { font-size: 0.8rem; color: var(--muted); font-style: italic; line-height: 1.4; margin-bottom: 6px; }
+    .digest-tag-row { display: flex; flex-wrap: wrap; gap: 4px; }
+    .digest-tag {
+      font-size: 0.65rem;
+      background: #f0f0f0;
+      color: #555;
+      border-radius: 8px;
+      padding: 2px 7px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .digest-tag { background: #2a2a2a; color: #aaa; }
+    }
+
+    .digest-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
+    .digest-topic-section {
+      padding: 10px 14px 10px 12px;
+      border-left: 3px solid var(--accent);
+      margin: 0 14px 10px;
+      border-radius: 0 6px 6px 0;
+    }
+    .digest-topic-name {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 3px;
+    }
+    .digest-topic-summary { font-size: 0.78rem; color: var(--muted); line-height: 1.4; margin-bottom: 8px; }
+    .digest-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+    .digest-chip {
+      display: inline-block;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 3px 10px;
+      font-size: 0.72rem;
+      color: var(--accent);
+      cursor: pointer;
+      line-height: 1.3;
+      transition: background 0.12s, color 0.12s;
+    }
+    .digest-chip:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .dupe-badge {
+      font-size: 0.68rem;
+      color: var(--muted);
+      background: var(--border);
+      border-radius: 10px;
+      padding: 1px 7px;
+      white-space: nowrap;
+    }
+
+    .nested-dupe {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 8px;
+    }
+    .nested-dupe-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 4px; }
+    .nested-dupe-title { font-size: 0.85rem; font-weight: 500; margin-bottom: 6px; line-height: 1.3; }
+
+    /* Health dashboard */
+    .health-bar {
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .health-bar.green { background: #d1fae5; color: #065f46; }
+    .health-bar.amber { background: #fef3c7; color: #92400e; }
+    .health-bar.red   { background: #fee2e2; color: #991b1b; }
+    @media (prefers-color-scheme: dark) {
+      .health-bar.green { background: #064e3b; color: #6ee7b7; }
+      .health-bar.amber { background: #451a03; color: #fcd34d; }
+      .health-bar.red   { background: #450a0a; color: #fca5a5; }
+    }
+    .health-bar-label { flex: 1; }
+    .health-bar-refresh { font-size: 0.82rem; font-weight: 400; cursor: pointer; padding: 4px 10px; border-radius: 6px; border: 1px solid currentColor; background: transparent; color: inherit; }
+
+    .health-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+    .health-card-header {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .health-card-header:hover { background: var(--bg); }
+    .health-card-title { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); flex: 1; }
+    .health-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .health-dot.green { background: #10b981; }
+    .health-dot.amber { background: #f59e0b; }
+    .health-dot.red   { background: #ef4444; }
+    .health-card-body { padding: 4px 14px 12px; border-top: 1px solid var(--border); }
+
+    .health-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 5px 0; font-size: 0.83rem; border-bottom: 1px solid var(--border); gap: 8px; }
+    .health-row:last-child { border-bottom: none; }
+    .health-row-label { color: var(--muted); flex-shrink: 0; }
+    .health-row-value { text-align: right; word-break: break-word; }
+    .health-row.amber { background: #fef9c3; border-radius: 6px; padding: 5px 6px; margin: 2px -6px; }
+    .health-row.red   { background: #fee2e2; border-radius: 6px; padding: 5px 6px; margin: 2px -6px; }
+    @media (prefers-color-scheme: dark) {
+      .health-row.amber { background: #2d2000; }
+      .health-row.red   { background: #2d0000; }
+    }
+
+    .health-disk-bar { height: 6px; background: var(--border); border-radius: 3px; margin: 6px 0 2px; overflow: hidden; }
+    .health-disk-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+    .health-disk-fill.green { background: #10b981; }
+    .health-disk-fill.amber { background: #f59e0b; }
+    .health-disk-fill.red   { background: #ef4444; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const FIZZY_API_KEY = "__FIZZY_API_KEY__";
+
+const TOPIC_COLORS = ["#7c6fcd", "#2b8a3e", "#1971c2", "#c0392b", "#0ea5e9", "#d97706"];
+
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function authHeaders() {
+  return { "Content-Type": "application/json", "Authorization": `Bearer ${FIZZY_API_KEY}` };
+}
+
+function formatDate(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) { console.log("[Fizzy] unparseable published_at:", ts); return ""; }
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function stripHtml(html) {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || "";
+}
+
+function hashColor(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return `hsl(${Math.abs(h) % 360}, 50%, 52%)`;
+}
+
+function Toast({ message }) {
+  return <div className="toast">{message}</div>;
+}
+
+function Thumbnail({ entry }) {
+  const feedName = entry.feed?.title || "?";
+  const initSrc = entry.image_url ||
+    ((entry.content || "").match(/<img[^>]+src=["']([^"']+)["']/i) || [])[1] ||
+    null;
+  const [src, setSrc] = useState(initSrc);
+  const letter = feedName.charAt(0).toUpperCase();
+  const color = hashColor(feedName);
+
+  if (!src) {
+    return <div className="thumb-fallback" style={{background: color}}>{letter}</div>;
+  }
+  return (
+    <img
+      className="thumb"
+      src={src}
+      alt=""
+      loading="lazy"
+      onError={() => setSrc(null)}
+    />
+  );
+}
+
+function TasteStrip() {
+  const [topics, setTopics] = useState([]);
+  useEffect(() => {
+    fetch("/rss/weights")
+      .then(r => r.json())
+      .then(d => {
+        const sorted = Object.entries(d.topics || {})
+          .sort((a, b) => b[1] - a[1]).slice(0, 5)
+          .map(([topic, weight]) => ({ topic, weight }));
+        setTopics(sorted);
+      })
+      .catch(() => {});
+  }, []);
+  return (
+    <div className="taste-strip">
+      <strong>Taste profile</strong>
+      <div className="taste-tags">
+        {topics.length === 0
+          ? <span className="taste-tag" style={{fontStyle:"italic"}}>Loading…</span>
+          : topics.map(t => (
+              <span key={t.topic} className="taste-tag">{t.topic} {t.weight.toFixed(1)}</span>
+            ))}
+      </div>
+    </div>
+  );
+}
+
+function DigestCard({ digest, entries, onArticleClick, onRefresh, dupeMap }) {
+  const [refreshing, setRefreshing] = useState(false);
+
+  if (!digest || digest.error) return null;
+
+  // Build per-article data map from Gemini-enriched topics
+  const articleDataMap = {};
+  (digest.topics || []).forEach(topic => {
+    (topic.articles || []).forEach(a => { articleDataMap[String(a.id)] = a; });
+  });
+
+  // Fallback entry map from live Miniflux entries
+  const entryMap = {};
+  (entries || []).forEach(e => {
+    entryMap[String(e.id)] = { title: e.title, feed: e.feed?.title || "" };
+  });
+
+  // Resolve: dupe IDs → canonical so clicks always find a visible article
+  const resolve = (id) => (dupeMap || {})[String(id)]?.canonical_id || String(id);
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { await onRefresh?.(); } finally { setRefreshing(false); }
+  };
+
+  // Format header date string
+  const genAt = digest.generated_at;
+  const genDate = genAt ? new Date(genAt) : null;
+  const genLabel = genDate && !isNaN(genDate)
+    ? genDate.toLocaleDateString(undefined, {weekday:"short", day:"numeric", month:"short"}) + " · " + formatDate(genAt)
+    : "";
+
+  // Top picks
+  const topPickIds = (digest.top_picks || [])
+    .map(id => String(id))
+    .filter(id => articleDataMap[id] || entryMap[id])
+    .slice(0, 3);
+
+  // Topics — filter to those with at least one visible article
+  const topics = (digest.topics || []).filter(t =>
+    (t.articles || []).some(a => entryMap[String(a.id)] || articleDataMap[String(a.id)])
+  );
+
+  if (!topPickIds.length && !topics.length) return null;
+
+  return (
+    <div className="digest-card-v2">
+      {/* Amber header */}
+      <div className="digest-header">
+        <span>⚡ TODAY'S BRIEF{genLabel ? " · " + genLabel : ""}</span>
+        <button className="digest-refresh-btn" onClick={handleRefresh} disabled={refreshing} title="Refresh digest">
+          {refreshing ? "…" : "↻"}
+        </button>
+      </div>
+
+      {/* Top Picks */}
+      {topPickIds.length > 0 && (
+        <div className="digest-section">
+          <div className="digest-section-label">🔥 Top Picks</div>
+          {topPickIds.map(id => {
+            const a = articleDataMap[id] || {};
+            const e = entryMap[id] || {};
+            const title = a.title || e.title || "";
+            const source = a.source || e.feed || "";
+            return (
+              <div key={id} className="digest-pick-card" onClick={() => onArticleClick(resolve(id))}>
+                <div className="digest-pick-title">{title}</div>
+                {source && <div className="digest-pick-source">{source}</div>}
+                {a.summary && <div className="digest-pick-summary">{a.summary}</div>}
+                {(a.tags || []).length > 0 && (
+                  <div className="digest-tag-row">
+                    {a.tags.map(tag => <span key={tag} className="digest-tag">{tag}</span>)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {topPickIds.length > 0 && topics.length > 0 && <div className="digest-sep" />}
+
+      {/* Topic sections */}
+      <div style={{paddingTop: topics.length > 0 ? 10 : 0, paddingBottom: topics.length > 0 ? 4 : 0}}>
+        {topics.map((topic, i) => {
+          const color = TOPIC_COLORS[hashStr(topic.label) % TOPIC_COLORS.length];
+          const validArticles = (topic.articles || []).filter(a => entryMap[String(a.id)] || articleDataMap[String(a.id)]);
+          return (
+            <div key={i} className="digest-topic-section" style={{borderLeftColor: color}}>
+              <div className="digest-topic-name" style={{color}}>{topic.label}</div>
+              {topic.summary && <div className="digest-topic-summary">{topic.summary}</div>}
+              <div className="digest-chips">
+                {validArticles.slice(0, 4).map(a => {
+                  const e = entryMap[String(a.id)] || {};
+                  const source = a.source || e.feed || "";
+                  const title = a.title || e.title || "";
+                  const chip = source ? `${source} — ${title}` : title;
+                  return (
+                    <span key={a.id} className="digest-chip" onClick={() => onArticleClick(resolve(String(a.id)))} title={title}>
+                      {chip.slice(0, 55)}{chip.length > 55 ? "…" : ""}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function NestedDupe({ entry }) {
+  const feedName = entry.feed?.title || entry.feed_title || "";
+  return (
+    <div className="nested-dupe">
+      <div className="nested-dupe-label">Also covered{feedName ? ` — ${feedName}` : ""}</div>
+      <div className="nested-dupe-title">{entry.title}</div>
+      <button className="btn" style={{fontSize:"0.8rem",padding:"5px 10px",minHeight:28}}
+        onClick={() => window.open(entry.url, "_blank", "noopener")}>
+        Read article ↗
+      </button>
+    </div>
+  );
+}
+
+function Article({ entry, isRead, onRead, dupeEntries, expandTrigger }) {
+  const [expanded, setExpanded] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [summarising, setSummarising] = useState(false);
+  const [isStarred, setIsStarred] = useState(entry.starred || false);
+  const [hasViewed, setHasViewed] = useState(false);
+  const [toast, setToast] = useState(null);
+  const articleRef = useRef(null);
+
+  const feedName = entry.feed?.title || "";
+  const isNewsletter = entry.feed?.category?.title === "Newsletters";
+  const topics = feedName ? [feedName] : [];
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
+
+  useEffect(() => {
+    if (expandTrigger && String(expandTrigger.id) === String(entry.id)) {
+      setExpanded(true);
+      if (summary === null && !summarising) fetchSummary();
+      setTimeout(() => {
+        articleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    }
+  }, [expandTrigger]);
+
+  const toggle = () => {
+    const willExpand = !expanded;
+    if (willExpand) {
+      if (summary === null && !summarising) fetchSummary();
+      if (!hasViewed) {
+        setHasViewed(true);
+        // Expand = light taste signal only (0.1); Miniflux read state unchanged until "Read article"
+        fetch("/rss/click", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ url: entry.url, title: entry.title, feed_name: feedName, topics, weight_override: 0.1 }),
+        }).catch(() => {});
+      }
+    }
+    setExpanded(willExpand);
+  };
+
+  const fetchSummary = async () => {
+    setSummarising(true);
+    const text = stripHtml(entry.content || entry.summary || "");
+    try {
+      const res = await fetch("/summarise", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: entry.title, text }),
+      });
+      const data = await res.json();
+      setSummary(data.summary);
+    } catch (e) {
+      setSummary("Could not load summary.");
+    } finally {
+      setSummarising(false);
+    }
+  };
+
+  const handleRead = async () => {
+    window.open(entry.url, "_blank", "noopener");
+    Promise.all([
+      fetch("/miniflux/v1/entries", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entry_ids: [entry.id], status: "read" }),
+      }),
+      fetch("/rss/click", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ url: entry.url, title: entry.title, feed_name: feedName, topics, weight_override: 0.5 }),
+      }),
+    ]).then(() => onRead(entry.id)).catch(() => {});
+  };
+
+  const handleBrief = async () => {
+    try {
+      const res = await fetch("/rss/brief", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ url: entry.url, title: entry.title, source: feedName }),
+      });
+      if (res.ok) showToast("Brief running… check #investing");
+      else showToast("Brief request failed");
+    } catch (e) { showToast("Brief request failed"); }
+  };
+
+  const handleReact = async (signal) => {
+    try {
+      await fetch("/rss/react", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ url: entry.url, title: entry.title, signal, topics, feed_name: feedName }),
+      });
+      showToast(signal === "up" ? "👍 Noted!" : "👎 Noted!");
+    } catch (e) { /* best-effort */ }
+  };
+
+  const handleStar = async () => {
+    const next = !isStarred;
+    setIsStarred(next);
+    try {
+      await fetch(`/miniflux/v1/entries/${entry.id}/bookmark`, { method: "PUT" });
+    } catch (e) { setIsStarred(!next); }
+  };
+
+  const content = stripHtml(entry.content || entry.summary || "");
+
+  return (
+    <div ref={articleRef} className={`article${isRead ? " read" : ""}${isNewsletter ? " newsletter" : ""}`}>
+      {toast && <Toast message={toast} />}
+      <div className="article-header" onClick={toggle}>
+        <Thumbnail entry={entry} />
+        <div className="article-meta">
+          <div className="article-title">{entry.title}</div>
+          <div className="article-feed">
+            {feedName || "Unknown feed"}
+            {isNewsletter && <span className="newsletter-badge">📧 Newsletter</span>}
+            {isRead && <span className="read-badge">✓ Read</span>}
+            {(dupeEntries || []).length > 0 && (
+              <span className="dupe-badge">🔁 {dupeEntries.length} source{dupeEntries.length !== 1 ? "s" : ""}</span>
+            )}
+          </div>
+        </div>
+        <div className="article-date">{formatDate(entry.published_at)}</div>
+      </div>
+      {expanded && (
+        <div className="article-body">
+          <div className={`summary-box${summarising ? " loading" : ""}`}>
+            <div className="summary-label">AI Summary</div>
+            {summarising ? "Summarising…" : (summary || "No summary yet.")}
+          </div>
+          {content && <div className="content-preview">{content}</div>}
+          <div className="article-actions">
+            <button className="btn primary" onClick={handleRead}>Read article ↗</button>
+            <button className="btn" onClick={handleBrief}>Send to Neo</button>
+            <button className="btn icon" onClick={handleStar} title={isStarred ? "Unstar" : "Star"}>{isStarred ? "★" : "☆"}</button>
+            <button className="btn" onClick={() => handleReact("up")}>👍</button>
+            <button className="btn" onClick={() => handleReact("down")}>👎</button>
+          </div>
+          {(dupeEntries || []).length > 0 && (
+            <div style={{marginTop:10}}>
+              <div style={{fontSize:"0.72rem",color:"var(--muted)",marginBottom:4}}>Also covering this story:</div>
+              {dupeEntries.map(de => <NestedDupe key={de.id} entry={de} />)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showTasteStrip, onCountChange, dupeMap, digest, onDigestRefresh }) {
+  const [entries, setEntries] = useState([]);
+  const [readIds, setReadIds] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [unreadOnly, setUnreadOnly] = useState(true);
+  const [toast, setToast] = useState(null);
+  const [fetchKey, setFetchKey] = useState(0);
+  const [expandTrigger, setExpandTrigger] = useState(null);
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(endpoint)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(d => setEntries(d.entries || []))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [endpoint, fetchKey]);
+
+  const effectiveDupeMap = dupeMap || {};
+
+  // Report live unread count to parent (Feed tab badge), excluding dupes
+  useEffect(() => {
+    if (showUnreadToggle && onCountChange) {
+      const count = entries.filter(e =>
+        !readIds.has(e.id) && e.status !== "read" && !effectiveDupeMap[String(e.id)]
+      ).length;
+      onCountChange(count);
+    }
+  }, [entries.length, readIds.size]);
+
+  const handleRead = (id) => setReadIds(prev => new Set([...prev, id]));
+
+  const isReadFn = (entry) => readIds.has(entry.id) || entry.status === "read";
+
+  const handleMarkAllRead = async () => {
+    if (!window.confirm("Mark all unread articles as read?")) return;
+    try {
+      const meRes = await fetch("/miniflux/v1/me");
+      const me = await meRes.json();
+      await fetch(`/miniflux/v1/users/${me.id}/mark-all-as-read`, { method: "PUT" });
+      setEntries([]);
+      setReadIds(new Set());
+      if (onCountChange) onCountChange(0);
+      showToast("All articles marked as read");
+      setFetchKey(k => k + 1);
+    } catch (e) {
+      showToast("Failed to mark all read");
+    }
+  };
+
+  // Build canonical→dupes map from entries
+  const dupesByCanonical = {};
+  if (Object.keys(effectiveDupeMap).length > 0) {
+    const entryById = {};
+    entries.forEach(e => { entryById[String(e.id)] = e; });
+    Object.entries(effectiveDupeMap).forEach(([dupeId, info]) => {
+      const canonId = String(info.canonical_id);
+      if (!dupesByCanonical[canonId]) dupesByCanonical[canonId] = [];
+      const dupeEntry = entryById[dupeId];
+      if (dupeEntry) dupesByCanonical[canonId].push(dupeEntry);
+    });
+  }
+
+  let visible = entries.filter(e => !effectiveDupeMap[String(e.id)]);
+  if (showUnreadToggle && unreadOnly) visible = visible.filter(e => !readIds.has(e.id));
+
+  return (
+    <div>
+      {toast && <Toast message={toast} />}
+      {showTasteStrip && <TasteStrip />}
+      {digest && (
+        <DigestCard
+          digest={digest}
+          entries={entries}
+          dupeMap={effectiveDupeMap}
+          onArticleClick={id => setExpandTrigger({ id, nonce: Date.now() })}
+          onRefresh={onDigestRefresh}
+        />
+      )}
+      {showUnreadToggle && (
+        <div className="view-controls">
+          <label className="toggle">
+            <input type="checkbox" checked={unreadOnly} onChange={e => setUnreadOnly(e.target.checked)} />
+            Unread only
+          </label>
+          <button className="btn danger" onClick={handleMarkAllRead} style={{marginLeft:"auto",minHeight:34,padding:"6px 12px",fontSize:"0.8rem"}}>
+            Mark all read
+          </button>
+        </div>
+      )}
+      {loading && <div className="status-bar">Loading…</div>}
+      {error && <div className="status-bar">Error: {error}</div>}
+      {!loading && !error && visible.length === 0 && <div className="status-bar">{emptyMsg}</div>}
+      <div className="article-list">
+        {visible.map(entry => (
+          <Article
+            key={entry.id}
+            entry={entry}
+            isRead={isReadFn(entry)}
+            onRead={handleRead}
+            dupeEntries={dupesByCanonical[String(entry.id)] || []}
+            expandTrigger={expandTrigger}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const STATUS_ICON = { green: "✓", amber: "⚠", red: "✕" };
+
+function HealthDot({ status }) {
+  return <span className={`health-dot ${status || "green"}`} />;
+}
+
+function HealthCard({ title, status, children }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="health-card">
+      <div className="health-card-header" onClick={() => setOpen(o => !o)}>
+        <HealthDot status={status} />
+        <div className="health-card-title">{title}</div>
+        <span style={{color:"var(--muted)",fontSize:"0.8rem"}}>{open ? "▲" : "▼"}</span>
+      </div>
+      {open && <div className="health-card-body">{children}</div>}
+    </div>
+  );
+}
+
+function HRow({ label, value, status }) {
+  return (
+    <div className={`health-row${status && status !== "green" ? " " + status : ""}`}>
+      <span className="health-row-label">{label}</span>
+      <span className="health-row-value">{value}</span>
+    </div>
+  );
+}
+
+function AgentCard({ data }) {
+  if (!data) return null;
+  return (
+    <HealthCard title="RSS Agent" status={data.status}>
+      <HRow label="Last run" value={data.message || "—"} status={data.status !== "green" ? data.status : undefined} />
+      {data.detail && <HRow label="Detail" value={data.detail} />}
+      {data.run_status && <HRow label="Run status" value={data.run_status} />}
+    </HealthCard>
+  );
+}
+
+function MinifluxCard({ data }) {
+  if (!data) return null;
+  const { feed_count, feeds, section_status } = data;
+  const nonGreen = (feeds || []).filter(f => f.status !== "green");
+  const shown = nonGreen.length > 0 ? nonGreen : (feeds || []).slice(0, 5);
+  return (
+    <HealthCard title={`Miniflux · ${feed_count} feeds`} status={section_status}>
+      {shown.map((f, i) => (
+        <div key={i}>
+          <HRow
+            label={f.title}
+            value={`${f.hours_since_check}h ago${f.error_count > 0 ? ` · ${f.error_count} err` : ""}`}
+            status={f.status !== "green" ? f.status : undefined}
+          />
+          {f.error_count > 0 && f.error_message && (
+            <div style={{fontSize:"0.75rem",color:"var(--muted)",paddingBottom:4,paddingLeft:4,wordBreak:"break-word"}}>
+              {f.error_message.slice(0, 100)}
+            </div>
+          )}
+        </div>
+      ))}
+      {nonGreen.length === 0 && feeds && feeds.length > 5 && (
+        <div style={{fontSize:"0.78rem",color:"var(--muted)",paddingTop:4}}>+{feeds.length - 5} more feeds — all healthy</div>
+      )}
+    </HealthCard>
+  );
+}
+
+function DigestHealthCard({ data }) {
+  if (!data) return null;
+  const { status, generated_at, hours_since_generated, topic_count, dupe_count, message } = data;
+  return (
+    <HealthCard title="Digest" status={status}>
+      {message
+        ? <HRow label="Status" value={message} status={status} />
+        : <>
+            <HRow label="Generated" value={`${hours_since_generated}h ago`} status={status !== "green" ? status : undefined} />
+            <HRow label="Topics" value={topic_count ?? "—"} />
+            <HRow label="Dupes found" value={dupe_count ?? "—"} />
+          </>
+      }
+      {status === "red" && !generated_at && (
+        <div style={{fontSize:"0.78rem",color:"var(--muted)",paddingTop:4}}>Open Feed tab to trigger generation</div>
+      )}
+    </HealthCard>
+  );
+}
+
+function StorageCard({ data }) {
+  if (!data) return null;
+  const { disk_used_gb, disk_total_gb, disk_percent_used, disk_status, files, section_status } = data;
+  return (
+    <HealthCard title="Storage" status={section_status}>
+      <div style={{fontSize:"0.83rem",marginTop:4}}>
+        {disk_used_gb} GB used of {disk_total_gb} GB ({disk_percent_used}%)
+      </div>
+      <div className="health-disk-bar">
+        <div className={`health-disk-fill ${disk_status}`} style={{width:`${Math.min(disk_percent_used,100)}%`}} />
+      </div>
+      {(files || []).map((f, i) => (
+        <HRow key={i} label={f.name} value={`${f.size_kb} KB`} status={f.status !== "green" ? f.status : undefined} />
+      ))}
+    </HealthCard>
+  );
+}
+
+function ServiceCard({ data }) {
+  if (!data) return null;
+  return (
+    <HealthCard title="Service" status={data.status}>
+      <HRow
+        label="fizzy-rss"
+        value={data.fizzy_rss_active ? "● active" : "✕ stopped"}
+        status={data.status !== "green" ? data.status : undefined}
+      />
+    </HealthCard>
+  );
+}
+
+function StatsView() {
+  const [health, setHealth] = useState(null);
+  const [healthLoading, setHealthLoading] = useState(true);
+  const [healthCachedAt, setHealthCachedAt] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [weights, setWeights] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  const fetchHealth = (force = false) => {
+    const now = Date.now();
+    if (!force && healthCachedAt && now - healthCachedAt < 60000) return;
+    setHealthLoading(true);
+    fetch("/rss/health")
+      .then(r => r.json())
+      .then(d => { setHealth(d); setHealthCachedAt(Date.now()); })
+      .catch(e => console.error("[Fizzy health]", e))
+      .finally(() => setHealthLoading(false));
+  };
+
+  useEffect(() => {
+    fetchHealth();
+    Promise.all([
+      fetch("/miniflux/v1/entries?status=unread&limit=1").then(r => r.json()),
+      fetch("/miniflux/v1/entries?status=read&limit=1").then(r => r.json()),
+      fetch("/rss/weights").then(r => r.json()),
+    ])
+      .then(([unreadData, readData, weightsData]) => {
+        setStats({ unread: unreadData.total || 0, read: readData.total || 0 });
+        setWeights(weightsData);
+      })
+      .catch(e => console.error("[Fizzy stats]", e))
+      .finally(() => setStatsLoading(false));
+  }, []);
+
+  const overall = health?.overall || "green";
+  const sections = health?.sections || {};
+  const amberCount = Object.values(sections).filter(s => (s?.status || s?.section_status) === "amber").length;
+  const redCount = Object.values(sections).filter(s => (s?.status || s?.section_status) === "red").length;
+  const actionCount = overall === "red" ? redCount : amberCount;
+
+  const overallMsg = overall === "green"
+    ? "✓ All systems healthy"
+    : overall === "amber"
+    ? `⚠ ${actionCount} item${actionCount !== 1 ? "s" : ""} need attention`
+    : `✕ ${actionCount} item${actionCount !== 1 ? "s" : ""} need action`;
+
+  const sortedTopics = Object.entries(weights?.topics || {}).sort((a, b) => b[1] - a[1]);
+  const maxWeight = sortedTopics.length > 0 ? sortedTopics[0][1] : 1;
+  const totalUnread = stats?.unread || 0;
+  const totalRead = stats?.read || 0;
+
+  return (
+    <div>
+      {/* Health bar */}
+      <div className={`health-bar ${healthLoading ? "green" : overall}`}>
+        <span className="health-bar-label">{healthLoading ? "Checking system health…" : overallMsg}</span>
+        <button className="health-bar-refresh" onClick={() => fetchHealth(true)}>↻ Refresh</button>
+      </div>
+
+      {/* Health section cards */}
+      {!healthLoading && health && (
+        <>
+          <AgentCard data={sections.agent} />
+          <MinifluxCard data={sections.miniflux} />
+          <DigestHealthCard data={sections.digest} />
+          <StorageCard data={sections.storage} />
+          <ServiceCard data={sections.service} />
+        </>
+      )}
+
+      {/* Existing stats below */}
+      {!statsLoading && (
+        <>
+          <div className="stats-card" style={{marginTop:16}}>
+            <h3>Reading stats</h3>
+            <div className="stats-row">
+              <div className="stat-block">
+                <div className="stat-value">{totalUnread}</div>
+                <div className="stat-label">Unread</div>
+              </div>
+              <div className="stat-block">
+                <div className="stat-value">{totalRead}</div>
+                <div className="stat-label">Read</div>
+              </div>
+              <div className="stat-block">
+                <div className="stat-value">{totalUnread + totalRead}</div>
+                <div className="stat-label">Total</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="stats-card">
+            <h3>Taste profile</h3>
+            {sortedTopics.length === 0
+              ? <div style={{color:"var(--muted)",fontSize:"0.85rem"}}>No data yet.</div>
+              : sortedTopics.map(([topic, weight]) => (
+                  <div key={topic} className="taste-bar-row">
+                    <div className="taste-bar-label">{topic}</div>
+                    <div className="taste-bar-track">
+                      <div className="taste-bar-fill" style={{width:`${(weight/maxWeight*100).toFixed(0)}%`}} />
+                    </div>
+                    <div className="taste-bar-value">{weight.toFixed(1)}</div>
+                  </div>
+                ))
+            }
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const ENDPOINTS = {
+  feed:    "/miniflux/v1/entries?status=unread&order=published_at&direction=desc&limit=100",
+  starred: "/miniflux/v1/entries?starred=true&order=published_at&direction=desc&limit=100",
+  all:     "/miniflux/v1/entries?order=published_at&direction=desc&limit=200",
+};
+
+const EMPTY_MSGS = {
+  feed:    "No unread articles.",
+  starred: "No starred articles.",
+  all:     "No articles found.",
+};
+
+function App() {
+  const [activeTab, setActiveTab] = useState("feed");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [feedUnreadCount, setFeedUnreadCount] = useState(0);
+  const [digest, setDigest] = useState(null);
+  const [dupeMap, setDupeMap] = useState({});
+
+  const fetchDigest = (force = false) => {
+    const url = force ? "/rss/digest?refresh=true" : "/rss/digest";
+    return fetch(url)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.error) {
+          setDigest(d);
+          setDupeMap(d.duplicates || {});
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => { fetchDigest(); }, []);
+
+  const refresh = () => setRefreshKey(k => k + 1);
+
+  const tabs = [
+    { id: "feed",    label: feedUnreadCount > 0 ? `Feed (${feedUnreadCount})` : "Feed" },
+    { id: "starred", label: "Starred" },
+    { id: "all",     label: "All" },
+    { id: "stats",   label: "Stats" },
+  ];
+
+  return (
+    <div>
+      <header>
+        <div className="header-main">
+          <h1>⚡ Fizzy RSS</h1>
+          <button className="btn" onClick={refresh} style={{minHeight:34,padding:"6px 12px"}}>↻</button>
+        </div>
+        <div className="tab-bar">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              className={`tab-btn${activeTab === t.id ? " active" : ""}`}
+              onClick={() => setActiveTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </header>
+      <main>
+        {activeTab === "stats"
+          ? <StatsView key={`stats-${refreshKey}`} />
+          : <ArticleListView
+              key={`${activeTab}-${refreshKey}`}
+              endpoint={ENDPOINTS[activeTab]}
+              emptyMsg={EMPTY_MSGS[activeTab]}
+              showUnreadToggle={activeTab === "feed"}
+              showTasteStrip={activeTab === "feed"}
+              onCountChange={activeTab === "feed" ? setFeedUnreadCount : undefined}
+              dupeMap={activeTab === "feed" || activeTab === "all" ? dupeMap : undefined}
+              digest={activeTab === "feed" ? digest : undefined}
+              onDigestRefresh={activeTab === "feed" ? () => fetchDigest(true) : undefined}
+            />
+        }
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
