@@ -297,13 +297,40 @@ def _generate_digest() -> dict:
 
     articles_text = "\n".join(article_lines)
 
+    # Load taste profile for personalised ranking
+    interests_section = ""
+    try:
+        weights_path = DATA_DIR / "rss_weights.json"
+        if weights_path.exists():
+            with open(weights_path) as f:
+                weights_data = json.load(f)
+            top_interests = sorted(
+                (weights_data.get("topics") or {}).items(),
+                key=lambda x: x[1], reverse=True
+            )[:10]
+            if top_interests:
+                interests_list = ", ".join(f"{k}: {v:.1f}" for k, v in top_interests)
+                interests_section = (
+                    f"Ted's reading interests (ranked by engagement score):\n"
+                    f"{interests_list}\n\n"
+                    "Use these interests to:\n"
+                    "1. Rank top_picks — articles that match his highest-scoring interests should rank first\n"
+                    "2. When multiple groupings are possible, prefer groupings that align with his interests\n"
+                    "3. Add a \"relevance_reason\" field to each top_pick object: a 3-5 word phrase explaining "
+                    "why it's relevant to his interests (e.g. \"matches your AI interest\" or \"aligns with "
+                    "productivity focus\"). Keep it natural, not robotic.\n\n"
+                )
+    except Exception:
+        pass
+
     prompt = (
         "You are a personalized news editor for a busy investor and technologist.\n\n"
-        "Article list (ID | Feed | Title):\n"
+        + interests_section
+        + "Article list (ID | Feed | Title):\n"
         f"{articles_text}\n\n"
         "Return ONLY valid JSON with this exact structure:\n"
         "{\n"
-        '  "top_picks": ["id1", "id2", "id3"],\n'
+        '  "top_picks": [{"id": "entry_id", "relevance_reason": "3-5 word phrase"}, ...],\n'
         '  "topics": [\n'
         '    {\n'
         '      "label": "Topic Name (≤4 words)",\n'
@@ -324,7 +351,7 @@ def _generate_digest() -> dict:
         '  }\n'
         "}\n\n"
         "Rules:\n"
-        "- top_picks: 2-3 IDs of the most significant stories of the day (any topic)\n"
+        "- top_picks: 2-3 objects, each with id and relevance_reason, ordered by interest match\n"
         "- topics: up to 5 groups, each with 2-4 articles, ordered by investor/tech relevance\n"
         "- article summary: 1 factual sentence; never start with 'This article discusses'\n"
         "- tags: 2-4 lowercase single-word tags per article, no spaces\n"
@@ -350,8 +377,21 @@ def _generate_digest() -> dict:
         print(f"[digest] Gemini failed: {e}")
         return {"error": "digest_unavailable", "generated_at": None, "top_picks": [], "topics": [], "duplicates": {}}
 
-    # Validate and sanitize top_picks
-    top_picks = [str(i) for i in (result.get("top_picks") or []) if str(i) in valid_ids][:3]
+    # Validate top_picks — support new {id, relevance_reason} objects and old string format
+    top_picks = []
+    top_pick_reasons: dict[str, str] = {}
+    for item in (result.get("top_picks") or [])[:3]:
+        if isinstance(item, dict):
+            tid = str(item.get("id", ""))
+            if tid in valid_ids:
+                top_picks.append(tid)
+                reason = str(item.get("relevance_reason", ""))[:100].strip()
+                if reason:
+                    top_pick_reasons[tid] = reason
+        else:
+            tid = str(item)
+            if tid in valid_ids:
+                top_picks.append(tid)
 
     # Validate topics — support both new {articles:[]} and old {article_ids:[]} shape
     topics = []
@@ -386,7 +426,13 @@ def _generate_digest() -> dict:
             }
 
     generated_at = datetime.now(timezone.utc).isoformat()
-    digest = {"generated_at": generated_at, "top_picks": top_picks, "topics": topics, "duplicates": duplicates}
+    digest = {
+        "generated_at": generated_at,
+        "top_picks": top_picks,
+        "top_pick_reasons": top_pick_reasons,
+        "topics": topics,
+        "duplicates": duplicates,
+    }
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with open(DIGEST_PATH, "w") as f:
