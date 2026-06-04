@@ -60,3 +60,35 @@ Always SSH and read current files before writing any code. The Pi is the source 
 ## Never touch
 - `/home/ted/neo-repo/agents/rss/data/` — shared data, owned by neo-repo
 - The RSS agent scripts in neo-repo — separate codebase
+
+## Workflow
+
+### Linear
+Use the `linear-claude` connector for all Linear operations (not the planning connector).
+
+When starting a ticket:
+- Move it to In Progress immediately before doing any work
+
+When finishing a ticket:
+- Post a comment summarising: what was audited, what was changed, any findings beyond the spec, any caveats
+- Move to In Review
+- Never move to Done — that's Ted's gate
+
+### Three-actor model
+- Ted — decision-maker, approves Done, provides direction via Claude.ai
+- Claude (claude.ai project) — planner, spec writer, Linear ticket author
+- Claude Code (this) — implementation executor on Pi via SSH
+
+### Audit-first rule
+Always SSH and read current files before writing any code. The Pi is the source of truth. Specs that skip audit have repeatedly targeted wrong files.
+
+### Minimal correct solution
+Scope down to the smallest working fix. Don't redesign when a targeted change solves the problem.
+
+### No restart needed for index.html changes
+`fizzy-rss.service` restart only required when `backend/rss_api.py` changes. Frontend changes to `index.html` take effect immediately on next page load.
+
+### Deploy pattern
+On Mac: `git add . && git commit -m "..." && git push`
+On Pi: `cd /home/ted/fizzy-rss && git pull`
+Then if backend changed: `systemctl --user restart fizzy-rss`
