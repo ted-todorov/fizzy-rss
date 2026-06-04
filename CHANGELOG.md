@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-06-04 — CLA-228: Taste profile personalisation
+- Digest generation now reads rss_weights.json and injects top 10 interests into Gemini prompt
+- Top picks ranked by relevance to taste profile; each pick includes a relevance_reason
+- Taste profile display redesigned: "Your reading DNA" header, emoji pills, top 3 amber-tinted, no raw numbers
+
+## 2026-06-04 — CLA-227: Daily digest archiver + history browser + favicon chips
+- digest_archiver.py: nightly cron (23:00) snapshots digest to fizzy_digest_history.jsonl, marks all Miniflux entries read, clears digest cache
+- GET /rss/digest/history and GET /rss/digest/history/{date} endpoints added
+- DigestCard: "📅 Previous Digests" section with expandable day cards; archived article links fetch original URL from Miniflux
+- Article chips redesigned: favicon (Google S2) + title, replacing "Source — Title..." text
+
+## 2026-06-04 — CLA-229: Workflow instructions added to CLAUDE.md
+- Added ## Workflow section: Linear connector usage, In Progress/In Review flow, audit-first rule, deploy pattern
+
+## 2026-06-04 — CLA-223: Digest card redesign
+- Enriched Gemini prompt: per-article summary, tags, top_picks array, feed_domain
+- DigestCard: amber header strip, Top Picks section with rich article cards, coloured topic sections with left borders
+- Refresh button bypasses 24h cache (?refresh=true)
+
+## 2026-06-04 — CLA-221: System health dashboard
+- GET /rss/health endpoint: 5 sections (agent, miniflux, digest, storage, service), green/amber/red logic
+- Stats tab redesigned: overall health bar + collapsible section cards
+
+## 2026-06-04 — CLA-220: Daily digest card + article deduplication
+- GET /rss/digest endpoint: Gemini-powered topic grouping and deduplication, cached to fizzy_digest.json
+- DigestCard added to Feed tab
+- Dupe articles hidden from main list; canonical articles show 🔁 N sources pill
+
 ## 2026-06-02 — Initial extraction from neo-repo (CLA-222)
 
 Fizzy RSS extracted from `ted-todorov/neo` into its own standalone repo.

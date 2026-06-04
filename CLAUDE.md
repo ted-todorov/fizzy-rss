@@ -92,3 +92,8 @@ Scope down to the smallest working fix. Don't redesign when a targeted change so
 On Mac: `git add . && git commit -m "..." && git push`
 On Pi: `cd /home/ted/fizzy-rss && git pull`
 Then if backend changed: `systemctl --user restart fizzy-rss`
+
+### CHANGELOG
+Update CHANGELOG.md as the final step of every ticket, before moving to In Review.
+Add an entry under the current date with the ticket number and a brief summary of what changed.
+Newest entries go at the top.
