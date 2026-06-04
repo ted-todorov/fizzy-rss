@@ -5,6 +5,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 # neo-repo must be on sys.path for shared scripts (rss_weights, rss_reaction_poller)
 _NEO_REPO = Path("/home/ted/neo-repo")
@@ -12,7 +13,7 @@ if str(_NEO_REPO) not in sys.path:
     sys.path.insert(0, str(_NEO_REPO))
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -28,6 +29,7 @@ FIZZY_DIR = Path(__file__).parent.parent / "frontend"
 DATA_DIR = Path("/home/ted/neo-repo/agents/rss/data")
 CLICK_EVENTS_PATH = DATA_DIR / "click_events.jsonl"
 DIGEST_PATH = DATA_DIR / "fizzy_digest.json"
+HISTORY_PATH = DATA_DIR / "fizzy_digest_history.jsonl"
 
 app = FastAPI()
 
@@ -260,15 +262,28 @@ def _generate_digest() -> dict:
                     except Exception:
                         pass
 
-    # Build article list for prompt
+    # Build article list for prompt + feed_domain map for favicon
     article_lines = []
     valid_ids: set[str] = set()
+    feed_domain_map: dict[str, str] = {}
+
+    def _extract_domain(url: str) -> str:
+        try:
+            h = urlparse(url).hostname or ""
+            return h[4:] if h.startswith("www.") else h
+        except Exception:
+            return ""
+
     for e in entries[:100]:
         eid = str(e.get("id", ""))
         title = str(e.get("title", ""))[:200]
-        feed = (e.get("feed") or {}).get("title", "")[:80]
+        feed_info = e.get("feed") or {}
+        feed = feed_info.get("title", "")[:80]
         valid_ids.add(eid)
         article_lines.append(f'ID:{eid} | Feed:{feed} | {title}')
+        domain = _extract_domain(feed_info.get("site_url", "")) or _extract_domain(e.get("url", ""))
+        if domain:
+            feed_domain_map[eid] = domain
 
     for a in newsletter_entries[:30]:
         eid = str(a.get("id", ""))
@@ -276,6 +291,9 @@ def _generate_digest() -> dict:
         feed = str(a.get("feed_title", ""))[:80]
         valid_ids.add(eid)
         article_lines.append(f'ID:{eid} | Feed:{feed} | {title}')
+        domain = _extract_domain(a.get("url", ""))
+        if domain:
+            feed_domain_map[eid] = domain
 
     articles_text = "\n".join(article_lines)
 
@@ -354,6 +372,7 @@ def _generate_digest() -> dict:
                 "source": str(a.get("source", ""))[:80],
                 "summary": str(a.get("summary", ""))[:300],
                 "tags": [str(tag)[:30].lower() for tag in (a.get("tags") or [])[:4] if tag],
+                "feed_domain": feed_domain_map.get(aid, ""),
             })
         if label and articles:
             topics.append({"label": label, "summary": summary, "articles": articles})
@@ -398,6 +417,53 @@ async def rss_digest(request: Request):
         return JSONResponse({"error": "digest_unavailable", "generated_at": None, "top_picks": [], "topics": [], "duplicates": {}})
 
     return JSONResponse(digest)
+
+
+@app.get("/rss/digest/history")
+async def rss_digest_history():
+    if not HISTORY_PATH.exists():
+        return JSONResponse({"dates": []})
+    dates = []
+    with open(HISTORY_PATH) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                dates.append({
+                    "date": obj["date"],
+                    "snapshotted_at": obj.get("snapshotted_at", ""),
+                    "topic_count": len(obj.get("topics") or []),
+                    "top_pick_count": len(obj.get("top_picks") or []),
+                })
+            except Exception:
+                pass
+    dates.sort(key=lambda x: x["date"], reverse=True)
+    return JSONResponse({"dates": dates[:30]})
+
+
+@app.get("/rss/digest/history/{date}")
+async def rss_digest_history_date(date: str):
+    if not HISTORY_PATH.exists():
+        raise HTTPException(status_code=404, detail="No history available")
+    with open(HISTORY_PATH) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                if obj.get("date") == date:
+                    return JSONResponse({
+                        "generated_at": obj.get("generated_at"),
+                        "top_picks": obj.get("top_picks") or [],
+                        "topics": obj.get("topics") or [],
+                        "duplicates": obj.get("dupe_map") or {},
+                    })
+            except Exception:
+                pass
+    raise HTTPException(status_code=404, detail="Date not found")
 
 
 LAST_RUN_PATH = DATA_DIR / "last_run.json"

@@ -401,7 +401,9 @@
     .digest-topic-summary { font-size: 0.78rem; color: var(--muted); line-height: 1.4; margin-bottom: 8px; }
     .digest-chips { display: flex; flex-wrap: wrap; gap: 5px; }
     .digest-chip {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -413,6 +415,58 @@
       transition: background 0.12s, color 0.12s;
     }
     .digest-chip:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .digest-chip:hover img { filter: brightness(10); }
+    .favicon-circle {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.55rem;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    /* Digest history */
+    .digest-history-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 14px;
+      text-align: left;
+      gap: 6px;
+    }
+    .digest-history-toggle:hover { background: var(--bg); }
+    .archive-day-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .archive-day-header {
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      gap: 10px;
+    }
+    .archive-day-header:hover { background: var(--bg); }
+    .archive-day-date { font-size: 0.88rem; font-weight: 600; }
+    .archive-day-meta { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+    .archive-day-chevron { color: var(--muted); font-size: 0.8rem; flex-shrink: 0; }
+    .archive-day-body { border-top: 1px solid var(--border); }
 
     .dupe-badge {
       font-size: 0.68rem;
@@ -585,8 +639,28 @@ function TasteStrip() {
   );
 }
 
-function DigestCard({ digest, entries, onArticleClick, onRefresh, dupeMap }) {
+function FaviconImg({ domain, source }) {
+  const [errored, setErrored] = useState(false);
+  if (!domain || errored) {
+    const letter = (source || "?")[0].toUpperCase();
+    return (
+      <span className="favicon-circle" style={{background: hashColor(source || "?")}}>{letter}</span>
+    );
+  }
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+      width="16" height="16"
+      style={{borderRadius:2,flexShrink:0,display:"block"}}
+      onError={() => setErrored(true)}
+      alt=""
+    />
+  );
+}
+
+function DigestCard({ digest, entries, onArticleClick, onRefresh, dupeMap, archiveDate }) {
   const [refreshing, setRefreshing] = useState(false);
+  const isArchive = !!archiveDate;
 
   if (!digest || digest.error) return null;
 
@@ -618,15 +692,15 @@ function DigestCard({ digest, entries, onArticleClick, onRefresh, dupeMap }) {
     ? genDate.toLocaleDateString(undefined, {weekday:"short", day:"numeric", month:"short"}) + " · " + formatDate(genAt)
     : "";
 
-  // Top picks
+  // Top picks — in archive mode, only require articleDataMap match
   const topPickIds = (digest.top_picks || [])
     .map(id => String(id))
-    .filter(id => articleDataMap[id] || entryMap[id])
+    .filter(id => articleDataMap[id] || (!isArchive && entryMap[id]))
     .slice(0, 3);
 
-  // Topics — filter to those with at least one visible article
+  // Topics — in archive mode show all; live mode filters to visible entries
   const topics = (digest.topics || []).filter(t =>
-    (t.articles || []).some(a => entryMap[String(a.id)] || articleDataMap[String(a.id)])
+    isArchive || (t.articles || []).some(a => entryMap[String(a.id)] || articleDataMap[String(a.id)])
   );
 
   if (!topPickIds.length && !topics.length) return null;
@@ -635,10 +709,15 @@ function DigestCard({ digest, entries, onArticleClick, onRefresh, dupeMap }) {
     <div className="digest-card-v2">
       {/* Amber header */}
       <div className="digest-header">
-        <span>⚡ TODAY'S BRIEF{genLabel ? " · " + genLabel : ""}</span>
-        <button className="digest-refresh-btn" onClick={handleRefresh} disabled={refreshing} title="Refresh digest">
-          {refreshing ? "…" : "↻"}
-        </button>
+        {isArchive
+          ? <span>📅 {archiveDate}</span>
+          : <span>⚡ TODAY'S BRIEF{genLabel ? " · " + genLabel : ""}</span>
+        }
+        {!isArchive && (
+          <button className="digest-refresh-btn" onClick={handleRefresh} disabled={refreshing} title="Refresh digest">
+            {refreshing ? "…" : "↻"}
+          </button>
+        )}
       </div>
 
       {/* Top Picks */}
@@ -652,8 +731,13 @@ function DigestCard({ digest, entries, onArticleClick, onRefresh, dupeMap }) {
             const source = a.source || e.feed || "";
             return (
               <div key={id} className="digest-pick-card" onClick={() => onArticleClick(resolve(id))}>
+                {(a.feed_domain || source) && (
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                    <FaviconImg domain={a.feed_domain} source={source} />
+                    {source && <span className="digest-pick-source" style={{margin:0}}>{source}</span>}
+                  </div>
+                )}
                 <div className="digest-pick-title">{title}</div>
-                {source && <div className="digest-pick-source">{source}</div>}
                 {a.summary && <div className="digest-pick-summary">{a.summary}</div>}
                 {(a.tags || []).length > 0 && (
                   <div className="digest-tag-row">
@@ -682,10 +766,10 @@ function DigestCard({ digest, entries, onArticleClick, onRefresh, dupeMap }) {
                   const e = entryMap[String(a.id)] || {};
                   const source = a.source || e.feed || "";
                   const title = a.title || e.title || "";
-                  const chip = source ? `${source} — ${title}` : title;
                   return (
                     <span key={a.id} className="digest-chip" onClick={() => onArticleClick(resolve(String(a.id)))} title={title}>
-                      {chip.slice(0, 55)}{chip.length > 55 ? "…" : ""}
+                      <FaviconImg domain={a.feed_domain} source={source} />
+                      <span>{title.slice(0, 50)}{title.length > 50 ? "…" : ""}</span>
                     </span>
                   );
                 })}
@@ -694,6 +778,112 @@ function DigestCard({ digest, entries, onArticleClick, onRefresh, dupeMap }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function ArchiveDayCard({ meta, isExpanded, onToggle, digest }) {
+  const [toast, setToast] = useState(null);
+  const dateObj = new Date(meta.date + "T12:00:00");
+  const dateLabel = dateObj.toLocaleDateString(undefined, {weekday:"short", day:"numeric", month:"short"});
+
+  const handleArticleClick = async (id) => {
+    try {
+      const resp = await fetch(`/miniflux/v1/entries/${id}`);
+      if (!resp.ok) throw new Error("not found");
+      const entry = await resp.json();
+      window.open(entry.url, "_blank", "noopener");
+    } catch (e) {
+      setToast("Article no longer available");
+      setTimeout(() => setToast(null), 2600);
+    }
+  };
+
+  return (
+    <div className="archive-day-card">
+      {toast && <Toast message={toast} />}
+      <div className="archive-day-header" onClick={onToggle}>
+        <div>
+          <div className="archive-day-date">{dateLabel}</div>
+          <div className="archive-day-meta">{meta.topic_count} topics · {meta.top_pick_count} top picks</div>
+        </div>
+        <span className="archive-day-chevron">{isExpanded ? "▲" : "▼"}</span>
+      </div>
+      {isExpanded && (
+        <div className="archive-day-body">
+          {!digest
+            ? <div style={{color:"var(--muted)",fontSize:"0.8rem",padding:"12px 14px"}}>Loading…</div>
+            : <DigestCard
+                digest={digest}
+                entries={[]}
+                onArticleClick={handleArticleClick}
+                dupeMap={digest.duplicates || {}}
+                archiveDate={dateLabel}
+              />
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DigestHistorySection() {
+  const [open, setOpen] = useState(false);
+  const [dates, setDates] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const [dayDigests, setDayDigests] = useState({});
+
+  const loadHistory = () => {
+    if (dates !== null) return;
+    fetch("/rss/digest/history")
+      .then(r => r.json())
+      .then(d => setDates(d.dates || []))
+      .catch(() => setDates([]));
+  };
+
+  const toggleOpen = () => {
+    if (!open) loadHistory();
+    setOpen(o => !o);
+  };
+
+  const toggleDay = (date) => {
+    if (expanded === date) {
+      setExpanded(null);
+      return;
+    }
+    setExpanded(date);
+    if (!dayDigests[date]) {
+      fetch(`/rss/digest/history/${date}`)
+        .then(r => r.json())
+        .then(d => setDayDigests(prev => ({...prev, [date]: d})))
+        .catch(() => {});
+    }
+  };
+
+  return (
+    <div style={{marginBottom: 14}}>
+      <button className="digest-history-toggle" onClick={toggleOpen}>
+        <span>📅 Previous Digests</span>
+        <span style={{marginLeft:"auto",color:"var(--muted)",fontSize:"0.8rem"}}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div>
+          {dates === null
+            ? <div style={{color:"var(--muted)",fontSize:"0.8rem",padding:"8px 2px"}}>Loading…</div>
+            : dates.length === 0
+            ? <div style={{color:"var(--muted)",fontSize:"0.8rem",padding:"8px 2px"}}>No archived digests yet.</div>
+            : dates.map(d => (
+                <ArchiveDayCard
+                  key={d.date}
+                  meta={d}
+                  isExpanded={expanded === d.date}
+                  onToggle={() => toggleDay(d.date)}
+                  digest={dayDigests[d.date]}
+                />
+              ))
+          }
+        </div>
+      )}
     </div>
   );
 }
@@ -947,6 +1137,7 @@ function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showTasteStrip,
           onRefresh={onDigestRefresh}
         />
       )}
+      {showTasteStrip && <DigestHistorySection />}
       {showUnreadToggle && (
         <div className="view-controls">
           <label className="toggle">
