@@ -3,6 +3,19 @@
 ## What this is
 Fizzy RSS is a personal RSS reader web app. FastAPI backend serves both the API and the static frontend HTML. Runs on a Raspberry Pi 5 as a systemd user service.
 
+## Repo boundary
+
+This repo is a standalone web app at `/home/ted/fizzy-rss` on the Pi.
+It is a pure UI/API layer on Miniflux.
+
+**It does NOT contain:**
+- Email or inbox processing
+- Newsletter ingestion
+- AgentMail integration
+
+All of the above live in neo-repo at `/home/ted/neo-repo/agents/rss/scripts/`.
+Any work touching email, newsletters, or AgentMail belongs in neo-repo, not here.
+
 ## Pi access
 SSH: ted@10.3.5.103
 Repo on Pi: /home/ted/fizzy-rss

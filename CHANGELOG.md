@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-06-08 — CLA-237: CLAUDE.md repo boundary note
+- Added `## Repo boundary` section near the top of `CLAUDE.md` clarifying this repo contains no email, newsletter, or AgentMail code — all of that lives in neo-repo at `/home/ted/neo-repo/agents/rss/scripts/`
+
 ## 2026-06-04 — CLA-228: Taste profile personalisation
 - Digest generation now reads rss_weights.json and injects top 10 interests into Gemini prompt
 - Top picks ranked by relevance to taste profile; each pick includes a relevance_reason
