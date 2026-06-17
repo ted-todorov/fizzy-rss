@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-17 — Bundle CDN scripts locally
+- Downloaded React 18, ReactDOM, and Babel standalone from unpkg.com to `frontend/` static directory
+- Updated `index.html` to load from `/static/` instead of unpkg.com CDN (fixes blank screen on devices where CDN is blocked/unavailable)
+
 ## 2026-06-08 — CLA-237: CLAUDE.md repo boundary note
 - Added `## Repo boundary` section near the top of `CLAUDE.md` clarifying this repo contains no email, newsletter, or AgentMail code — all of that lives in neo-repo at `/home/ted/neo-repo/agents/rss/scripts/`
 
