@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-06-29 — CLA-246: Evening digest doorbell + cron cleanup
+
+- `backend/evening_generate.py` (new) — standalone cron script replacing the blind 19:30 curl.
+  Hits `GET /rss/digest?refresh=true` on the running Fizzy service, validates the result
+  (≥1 topic, ≥1 top pick), and posts a doorbell to `#rss` **only on a non-empty digest**.
+  Writes `agents/rss/data/last_run.json` on every run so the Stats health panel and the
+  morning brief reflect actual evening-script health rather than the retired RSS agent's
+  last run. Does not mark any articles read.
+- Cron 19:30 — replaced `curl` with `python3 backend/evening_generate.py`; log now goes to
+  `/tmp/evening-generate.log`.
+- Cron 22:55 — curl kept (silent regeneration, no doorbell); log split to
+  `/tmp/fizzy-refresh-2255.log`.
+- Cron 23:00 — `digest_archiver.py` unchanged; archives + resets + marks all read.
+- Old `run_digest.py` (19:25) and `run_post.py` (19:30) remain commented/paused; their cron
+  comments updated to reference `evening_generate.py (CLA-246)` as the replacement.
+
 ## 2026-06-17 — Bundle CDN scripts locally
 - Downloaded React 18, ReactDOM, and Babel standalone from unpkg.com to `frontend/` static directory
 - Updated `index.html` to load from `/static/` instead of unpkg.com CDN (fixes blank screen on devices where CDN is blocked/unavailable)
