@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-06-29 — CLA-247: Conditional archiver + Gemini JSON retry
+
+Motivated by the Jun 26 incident: Gemini returned malformed JSON on both the
+19:30 and 22:55 runs, yet the 23:00 archiver still marked 123 articles read —
+silently destroying a full day of accumulated reading.
+
+### Core fix — conditional mark-all-read in `digest_archiver.py`
+- `digest_archiver.py` — `mark_all_read()` and `reset_digest()` are now gated
+  on a validity check at 23:00: the digest must exist, be error-free, be dated
+  today (UTC), and have ≥1 topic and ≥1 top pick. On a no-valid-digest night
+  the archiver logs "holding articles unread for tomorrow" and does not clear
+  Miniflux. A valid-digest night behaves exactly as before.
+- A stale file from a previous night (rare crash scenario) cannot trigger a
+  mark-all-read because the UTC date check rejects it.
+
+### Shared predicate — `backend/digest_utils.py` (new)
+- `is_valid_digest(digest, today_utc)` — single source of truth for "did
+  tonight produce a valid digest?" Imported by both `digest_archiver.py` and
+  `evening_generate.py` so the two scripts can never drift on the definition.
+- `today_utc()` — convenience helper returning today's YYYY-MM-DD in UTC.
+
+### `evening_generate.py` — uses shared predicate
+- Inline validity check replaced with `is_valid_digest(digest, today_utc())`.
+  Behaviour unchanged; predicate is now shared.
+
+### Secondary fix — Gemini JSON parse retry in `rss_api.py`
+- `_generate_digest()` — on `json.JSONDecodeError` the Gemini call is retried
+  once before failing. Logs `[digest] Gemini JSON parse error, retrying once:
+  ...` on the first failure. Any exception on the retry (including a second
+  parse error) propagates to the outer handler and returns `digest_unavailable`
+  as before. 503 / network errors still go directly to the outer handler.
+
 ## 2026-06-29 — CLA-246: Evening digest doorbell + cron cleanup
 
 - `backend/evening_generate.py` (new) — standalone cron script replacing the blind 19:30 curl.

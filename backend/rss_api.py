@@ -361,18 +361,26 @@ def _generate_digest() -> dict:
 
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
-        resp = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(max_output_tokens=4000, temperature=0.2),
-        )
-        raw = (resp.text or "").strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.rstrip("` \n")
-        result = json.loads(raw.strip())
+
+        def _call_gemini() -> dict:
+            resp = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(max_output_tokens=4000, temperature=0.2),
+            )
+            raw = (resp.text or "").strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+                raw = raw.rstrip("` \n")
+            return json.loads(raw.strip())
+
+        try:
+            result = _call_gemini()
+        except json.JSONDecodeError as e:
+            print(f"[digest] Gemini JSON parse error, retrying once: {e}")
+            result = _call_gemini()
     except Exception as e:
         print(f"[digest] Gemini failed: {e}")
         return {"error": "digest_unavailable", "generated_at": None, "top_picks": [], "topics": [], "duplicates": {}}

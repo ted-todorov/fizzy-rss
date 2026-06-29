@@ -30,6 +30,7 @@ def _load_env(path: str) -> None:
 _load_env("/home/ted/neo-repo/.env")
 
 import httpx  # noqa: E402 — must come after env load
+from digest_utils import is_valid_digest, today_utc  # noqa: E402
 
 FIZZY_PORT = 8088
 FIZZY_DIGEST_URL = f"http://localhost:{FIZZY_PORT}/rss/digest"
@@ -85,19 +86,15 @@ if __name__ == "__main__":
         _write_last_run("error", f"fetch failed: {e}")
         sys.exit(1)
 
-    # Step 2: validate — must have at least one topic and one top pick
-    topics = digest.get("topics") or []
-    top_picks = digest.get("top_picks") or []
-    error_field = digest.get("error")
-
-    if error_field or not topics or not top_picks:
-        reason = error_field or "empty digest"
+    # Step 2: validate using the same predicate as the archiver
+    if not is_valid_digest(digest, today_utc()):
+        reason = digest.get("error") or "empty or stale digest"
         print(f"[evening_generate] digest unavailable ({reason}) — no doorbell posted")
         _write_last_run("error", f"digest_unavailable: {reason}")
         sys.exit(0)
 
-    n_picks = len(top_picks)
-    n_topics = len(topics)
+    n_picks = len(digest.get("top_picks") or [])
+    n_topics = len(digest.get("topics") or [])
     detail = f"{n_picks} top picks across {n_topics} topics"
     print(f"[evening_generate] valid digest: {detail}")
 

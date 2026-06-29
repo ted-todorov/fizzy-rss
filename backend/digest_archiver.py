@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Nightly cron: archive today's digest, reset cache, mark all Miniflux entries read."""
+"""Nightly cron: archive today's digest, reset cache, mark all Miniflux entries read.
+
+Mark-all-read is conditional: only fires when tonight's digest is valid (non-empty,
+error-free, dated today UTC). On a no-valid-digest night articles are held unread
+for tomorrow — never silently cleared. See CLA-247.
+"""
 import json
 import os
 from datetime import datetime, timezone
@@ -21,6 +26,7 @@ def _load_env(path: str) -> None:
 _load_env("/home/ted/neo-repo/.env")
 
 import httpx  # noqa: E402 — must come after env load
+from digest_utils import is_valid_digest, today_utc  # noqa: E402
 
 DATA_DIR = Path("/home/ted/neo-repo/agents/rss/data")
 DIGEST_PATH = DATA_DIR / "fizzy_digest.json"
@@ -145,23 +151,36 @@ def mark_all_read() -> int:
 
 
 if __name__ == "__main__":
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    _today = today_utc()
     topic_count = 0
     entry_count = 0
 
+    # Check validity BEFORE archive_digest() so we read the file while it's still present.
+    # Valid = non-empty digest, no error field, dated today UTC. Stale/empty/error files
+    # never trigger a mark-all-read.
+    digest_valid = False
+    if DIGEST_PATH.exists():
+        try:
+            with open(DIGEST_PATH) as f:
+                digest_valid = is_valid_digest(json.load(f), _today)
+        except Exception as e:
+            print(f"[archiver] {_today}: could not read digest for validity check: {e}")
+
     try:
-        today, topic_count, _ = archive_digest()
+        _today, topic_count, _ = archive_digest()
     except Exception as e:
         print(f"[archiver] archive step failed: {e}")
 
-    try:
-        reset_digest()
-    except Exception as e:
-        print(f"[archiver] reset step failed: {e}")
+    if digest_valid:
+        try:
+            reset_digest()
+        except Exception as e:
+            print(f"[archiver] reset step failed: {e}")
+        try:
+            entry_count = mark_all_read()
+        except Exception as e:
+            print(f"[archiver] mark-read step failed: {e}")
+    else:
+        print(f"[archiver] {_today}: no valid digest tonight — holding articles unread for tomorrow")
 
-    try:
-        entry_count = mark_all_read()
-    except Exception as e:
-        print(f"[archiver] mark-read step failed: {e}")
-
-    print(f"[archiver] {today}: archived {topic_count} topics, marked {entry_count} entries read")
+    print(f"[archiver] {_today}: archived {topic_count} topics, marked {entry_count} entries read")
