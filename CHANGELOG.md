@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-01 — Alert on digest failure
+
+`evening_generate.py` now posts `⚠️ RSS digest failed: <reason>` to #homeserver
+whenever digest generation fails (Gemini error, fetch failure, or doorbell failure).
+Approved by Ted in #rss 2026-07-01.
+
 ## 2026-06-29 — CLA-247: Conditional archiver + Gemini JSON retry
 
 Motivated by the Jun 26 incident: Gemini returned malformed JSON on both the

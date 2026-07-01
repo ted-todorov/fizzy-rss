@@ -35,6 +35,7 @@ from digest_utils import is_valid_digest, today_utc  # noqa: E402
 FIZZY_PORT = 8088
 FIZZY_DIGEST_URL = f"http://localhost:{FIZZY_PORT}/rss/digest"
 RSS_CHANNEL_ID = "1476628292420505731"
+HOMESERVER_CHANNEL_ID = "1474147374589804545"
 DISCORD_API = "https://discord.com/api/v10"
 LAST_RUN_PATH = Path("/home/ted/neo-repo/agents/rss/data/last_run.json")
 
@@ -49,6 +50,21 @@ def _write_last_run(status: str, detail: str) -> None:
     LAST_RUN_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(LAST_RUN_PATH, "w") as f:
         json.dump(data, f, indent=2)
+
+
+def _alert_homeserver(msg: str) -> None:
+    token = os.environ.get("DISCORD_BOT_TOKEN", "")
+    if not token:
+        return
+    try:
+        httpx.post(
+            f"{DISCORD_API}/channels/{HOMESERVER_CHANNEL_ID}/messages",
+            headers={"Authorization": f"Bot {token}", "Content-Type": "application/json"},
+            json={"content": f"⚠️ RSS digest failed: {msg}"},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"[evening_generate] warning: homeserver alert failed: {e}")
 
 
 def _post_doorbell(n_picks: int, n_topics: int) -> None:
@@ -84,6 +100,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"[evening_generate] ERROR: digest fetch failed: {e}")
         _write_last_run("error", f"fetch failed: {e}")
+        _alert_homeserver(f"fetch failed: {e}")
         sys.exit(1)
 
     # Step 2: validate using the same predicate as the archiver
@@ -91,6 +108,7 @@ if __name__ == "__main__":
         reason = digest.get("error") or "empty or stale digest"
         print(f"[evening_generate] digest unavailable ({reason}) — no doorbell posted")
         _write_last_run("error", f"digest_unavailable: {reason}")
+        _alert_homeserver(reason)
         sys.exit(0)
 
     n_picks = len(digest.get("top_picks") or [])
@@ -104,6 +122,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"[evening_generate] ERROR: doorbell failed: {e}")
         _write_last_run("error", f"doorbell failed: {e}")
+        _alert_homeserver(f"doorbell failed: {e}")
         sys.exit(1)
 
     _write_last_run("ok", detail)
