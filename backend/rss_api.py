@@ -366,7 +366,7 @@ def _generate_digest() -> dict:
             resp = client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=prompt,
-                config=types.GenerateContentConfig(max_output_tokens=4000, temperature=0.2),
+                config=types.GenerateContentConfig(max_output_tokens=8000, temperature=0.2),
             )
             raw = (resp.text or "").strip()
             if raw.startswith("```"):
