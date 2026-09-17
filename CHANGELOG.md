@@ -18,15 +18,26 @@ entry recency), and selecting a source now issues a feed-scoped query
 batch — so a low-volume feed's own entries are actually fetched and shown, not just
 listed as an option that returns nothing.
 
-Verified against the actual rendered page this time (headless Chromium via
-Playwright, not logic-only): loaded the live app, switched to the "All" tab, opened
-the source dropdown, confirmed "Neo Newsletters" is present as an option, selected
-it, and confirmed newsletter articles actually rendered in the list.
+Verified against the actual rendered page this time — headless Chromium via
+Playwright, not logic-only verification (that's exactly what missed this bug the
+first time around). First pass caught a second, real bug that logic-only testing
+never would have: selecting a source fired the correct `feed_id`-scoped request, but
+a slower, still-in-flight fetch from the *previous* unfiltered "All" batch could
+resolve afterward and silently overwrite the correctly-filtered state with the old
+unfiltered one — a classic missing-cleanup race in the entries-fetching `useEffect`.
+Fixed with a `cancelled` flag so a superseded fetch's response is ignored. Re-ran
+against the live page after the fix: dropdown lists "Neo Newsletters", selecting it
+shows exactly its 3 articles all correctly labeled, switching between two different
+real sources (Neo Newsletters ↔ The Verge) and back to "All sources" each show the
+right subset, and the All/Unread/Read filter's Unread + Read counts sum to the All
+count. All checks pass on the actual rendered page.
 
 Changes:
 - `frontend/index.html`: `ArticleListView` now fetches `/miniflux/v1/feeds` for the
   dropdown's option list and switches to a `feed_id`-scoped entries query when a
-  source is selected, instead of deriving/filtering from the already-fetched batch.
+  source is selected, instead of deriving/filtering from the already-fetched batch;
+  added a cancellation guard to the entries-fetching effect to fix the resulting
+  stale-fetch race.
 
 ## 2026-09-17 — CLA-269: Add source filter + read-state filter to the "All" tab
 
