@@ -126,6 +126,18 @@
       flex-wrap: wrap;
     }
 
+    .filter-select {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.85rem;
+      min-height: 40px;
+      cursor: pointer;
+    }
+    .read-filter-group { display: flex; gap: 6px; }
+
     .taste-strip {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -1109,7 +1121,7 @@ function Article({ entry, isRead, onRead, dupeEntries, expandTrigger }) {
   );
 }
 
-function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showTasteStrip, onCountChange, dupeMap, digest, onDigestRefresh }) {
+function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showFilterBar, showTasteStrip, onCountChange, dupeMap, digest, onDigestRefresh }) {
   const [entries, setEntries] = useState([]);
   const [readIds, setReadIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
@@ -1118,6 +1130,8 @@ function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showTasteStrip,
   const [toast, setToast] = useState(null);
   const [fetchKey, setFetchKey] = useState(0);
   const [expandTrigger, setExpandTrigger] = useState(null);
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [readFilter, setReadFilter] = useState("all"); // "all" | "unread" | "read"
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
@@ -1175,8 +1189,15 @@ function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showTasteStrip,
     });
   }
 
+  const sources = showFilterBar
+    ? [...new Set(entries.map(e => e.feed?.title).filter(Boolean))].sort()
+    : [];
+
   let visible = entries.filter(e => !effectiveDupeMap[String(e.id)]);
   if (showUnreadToggle && unreadOnly) visible = visible.filter(e => !readIds.has(e.id));
+  if (showFilterBar && sourceFilter) visible = visible.filter(e => (e.feed?.title || "") === sourceFilter);
+  if (showFilterBar && readFilter === "unread") visible = visible.filter(e => !isReadFn(e));
+  if (showFilterBar && readFilter === "read") visible = visible.filter(e => isReadFn(e));
 
   return (
     <div>
@@ -1201,6 +1222,25 @@ function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showTasteStrip,
           <button className="btn danger" onClick={handleMarkAllRead} style={{marginLeft:"auto",minHeight:34,padding:"6px 12px",fontSize:"0.8rem"}}>
             Mark all read
           </button>
+        </div>
+      )}
+      {showFilterBar && (
+        <div className="view-controls">
+          <select className="filter-select" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
+            <option value="">All sources</option>
+            {sources.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <div className="read-filter-group">
+            {[["all","All"],["unread","Unread"],["read","Read"]].map(([id, label]) => (
+              <button
+                key={id}
+                className={`tab-btn${readFilter === id ? " active" : ""}`}
+                onClick={() => setReadFilter(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
       {loading && <div className="status-bar">Loading…</div>}
@@ -1523,6 +1563,7 @@ function App() {
               endpoint={ENDPOINTS[activeTab]}
               emptyMsg={EMPTY_MSGS[activeTab]}
               showUnreadToggle={activeTab === "feed"}
+              showFilterBar={activeTab === "all"}
               showTasteStrip={activeTab === "feed"}
               onCountChange={activeTab === "feed" ? setFeedUnreadCount : undefined}
               dupeMap={activeTab === "feed" || activeTab === "all" ? dupeMap : undefined}

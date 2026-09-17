@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-09-17 — CLA-269: Add source filter + read-state filter to the "All" tab
+
+Audited first and found one premise in the ticket didn't hold: the "All" tab's
+backend endpoint (`/miniflux/v1/entries?order=published_at&direction=desc&limit=200`)
+has no `status=unread` filter, and the client-side unread-only filter in
+`ArticleListView` is gated behind `showUnreadToggle`, which is `false` for "All" —
+so read articles were already present in the list, just with no way to isolate them.
+The real gap was the missing filter *controls*, not missing data.
+
+Also checked whether a separate category filter (beyond per-feed) was worth adding
+for "newsletters" specifically, per the ticket's "source/category" framing — found
+all newsletter senders are already funneled through one synthetic Miniflux feed
+("Neo Newsletters", `/rss/newsletter-feed`), so a plain per-feed source filter
+already isolates newsletters as a single selectable option. Skipped a separate
+category layer as redundant. Also skipped topic-tag filtering per the ticket's own
+scope note — real topic tags aren't reliably available per-entry from Miniflux
+(only `feed.title`), so adding that would've meant new backend work.
+
+Added to the "All" tab only (Feed and Starred unchanged):
+- A source dropdown listing every distinct feed present in the current entries,
+  filtering the list to that feed
+- A three-way All/Unread/Read filter (pill buttons, reusing `.tab-btn` styling)
+
+Changes:
+- `frontend/index.html`: `ArticleListView` gained a `showFilterBar` prop (wired to
+  `activeTab === "all"`), `sourceFilter`/`readFilter` state, and the filter bar UI;
+  small CSS additions (`.filter-select`, `.read-filter-group`).
+
 ## 2026-09-17 — CLA-254: Fix newsletter tap-to-open and reappearing duplicates
 
 Two reported bugs (2026-08-27, untouched since) turned out to share one root cause,
