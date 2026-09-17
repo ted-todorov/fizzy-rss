@@ -1157,12 +1157,18 @@ function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showFilterBar, 
     : endpoint;
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     fetch(effectiveEndpoint)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(d => setEntries(d.entries || []))
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .then(d => { if (!cancelled) setEntries(d.entries || []); })
+      .catch(e => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    // Guard against a stale in-flight fetch (e.g. the generic "All" batch)
+    // resolving after a newer one (e.g. a feed_id-scoped query) and
+    // clobbering fresher state — the slower request isn't always the first
+    // one fired. Found via real browser testing (CLA-269 follow-up).
+    return () => { cancelled = true; };
   }, [effectiveEndpoint, fetchKey]);
 
   const effectiveDupeMap = dupeMap || {};
