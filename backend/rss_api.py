@@ -250,17 +250,19 @@ def _generate_digest() -> dict:
     if not entries:
         return {"error": "digest_unavailable", "generated_at": None, "topics": [], "duplicates": {}}
 
-    # Also load newsletter articles
-    newsletter_entries = []
-    if (DATA_DIR / "newsletter_articles.jsonl").exists():
-        with open(DATA_DIR / "newsletter_articles.jsonl") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        newsletter_entries.append(json.loads(line))
-                    except Exception:
-                        pass
+    # Newsletter articles are NOT re-loaded from newsletter_articles.jsonl here
+    # (CLA-254). newsletter_ingestor.py's articles are served to Miniflux as a
+    # real subscribed feed (see /rss/newsletter-feed, category "Newsletters"),
+    # so they're already present in `entries` above with a real Miniflux entry
+    # id, respecting read/unread status like any other article. Reading the
+    # JSONL here too — as this used to — fed the same article into the Gemini
+    # prompt twice under two different id spaces (Miniflux's real id here vs.
+    # newsletter_ingestor's own nl-<hash> id), which caused two visible bugs:
+    # tap-to-open silently failing on newsletter digest cards (the frontend's
+    # expandTrigger match against live Miniflux entries could never find an
+    # "nl-..." id), and newsletter articles resurfacing in every digest
+    # indefinitely (the JSONL read had no unread-status filter at all — it
+    # just always included the first 30 lines of the file, forever).
 
     # Build article list for prompt + feed_domain map for favicon
     article_lines = []
@@ -288,16 +290,6 @@ def _generate_digest() -> dict:
         valid_ids.add(eid)
         article_lines.append(f'ID:{eid} | Feed:{feed} | {title}')
         domain = _extract_domain(feed_info.get("site_url", "")) or _extract_domain(e.get("url", ""))
-        if domain:
-            feed_domain_map[eid] = domain
-
-    for a in newsletter_entries[:30]:
-        eid = str(a.get("id", ""))
-        title = str(a.get("title", ""))[:200]
-        feed = str(a.get("feed_title", ""))[:80]
-        valid_ids.add(eid)
-        article_lines.append(f'ID:{eid} | Feed:{feed} | {title}')
-        domain = _extract_domain(a.get("url", ""))
         if domain:
             feed_domain_map[eid] = domain
 

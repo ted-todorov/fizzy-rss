@@ -1,5 +1,57 @@
 # Changelog
 
+## 2026-09-17 — CLA-254: Fix newsletter tap-to-open and reappearing duplicates
+
+Two reported bugs (2026-08-27, untouched since) turned out to share one root cause,
+not two. Audited the frontend click handler and `digest_archiver.py`'s mark-as-read
+flow first, per usual, and found the actual mechanism was different from what CLA-218's
+history suggested.
+
+**What CLA-218 (Jun 2026) actually did:** removed the in-app `ReaderOverlay` and
+decoupled expand-to-preview from mark-as-read — `toggle()` just shows an AI summary +
+content preview, `handleRead()` is the separate action that opens the URL and marks
+read via Miniflux. This already works correctly for regular RSS articles today. It
+is NOT what's broken for newsletters.
+
+**What's actually broken:** `_generate_digest()` read newsletter articles from
+`newsletter_articles.jsonl` directly, using `newsletter_ingestor.py`'s own
+`nl-<hash>` id scheme — but newsletter articles are *also* already ingested into
+Miniflux as a real subscribed feed (`/rss/newsletter-feed`, confirmed live as feed id
+31, category "Newsletters"), where Miniflux assigns them its own integer entry id.
+Every newsletter article was being fed into the Gemini digest prompt **twice**, once
+under each id. This caused both bugs:
+- **Tap-to-open silently failing**: the frontend's `expandTrigger` mechanism matches
+  a tapped digest card's id against the live Miniflux `entries` array by id — an
+  `nl-<hash>` id never matches anything there, so tapping a newsletter card did
+  nothing. Regular articles work because the digest already uses their real Miniflux
+  id.
+- **Duplicates reappearing**: the JSONL read had no unread/read filter at all — it
+  unconditionally included the first 30 lines of the file (oldest-first, since it's
+  append-only) in *every* digest generation, forever, regardless of whether the
+  article had already been read via Miniflux.
+
+**Fix:** removed the redundant JSONL read from `_generate_digest()` entirely.
+Newsletter articles now flow through the exact same path as regular RSS articles —
+same id space, same unread-status filtering, same tap-to-open mechanism, no
+bespoke reader UI needed.
+
+**Secondary finding, also fixed:** confirmed `newsletter_ingestor.py`'s thread-level
+dedup (AgentMail thread_id) is stable and correct — each email is only ever
+processed once. But its *article*-level dedup hash includes the raw extracted URL,
+which varies issue-to-issue for the same destination (tracking query strings,
+`http` vs `https`) — found two real examples in the live data
+(`coached.com/elevator-pitch?ref=coachedweekly` vs the bare URL; `http://` vs
+`https://coached.com/quiz`), each producing a fresh id for what's the same article.
+Added `_normalize_url_for_dedup()` (strips scheme/query/fragment/trailing slash for
+hashing only — the stored/displayed URL is untouched) so future occurrences of the
+same link don't re-appear as "new."
+
+Changes:
+- `backend/rss_api.py`: removed the `newsletter_articles.jsonl` read and its article
+  loop from `_generate_digest()`.
+- `agents/rss/scripts/newsletter_ingestor.py` (neo-repo): added
+  `_normalize_url_for_dedup()`, applied to the article-id hash.
+
 ## 2026-09-17 — CLA-262 / CLA-263: Fix two digest failure modes in `_generate_digest()`
 
 Two related bugs in the same function, both causing the digest to come back empty or
