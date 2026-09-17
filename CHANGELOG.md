@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-09-17 — CLA-262 / CLA-263: Fix two digest failure modes in `_generate_digest()`
+
+Two related bugs in the same function, both causing the digest to come back empty or
+broken. Bundled since fixing one without the other left the digest path still fragile.
+
+**CLA-262 — "ID:" prefix breaks article ID matching.** Article lines in the Gemini
+prompt are formatted `ID:{eid} | Feed:... | title`, and Gemini intermittently echoes
+that literal `ID:` label back in its response (`"id": "ID:18892"`) instead of just the
+bare id. The validation loops do an exact match against `valid_ids` (bare ids), so a
+prefixed id never matches — when this happens across most/all returned ids, the digest
+comes back empty. Non-deterministic; accounted for ~4 digest failures in the 2 weeks
+prior to 2026-09-16. Fixed by stripping the `ID:` prefix (`_strip_id_prefix()`) before
+matching, applied in the top_picks loop and the topics article loop as specced, plus
+the duplicates loop (`dupe_id` / `canonical_id`) — found during audit to have the same
+exact-match vulnerability, not explicitly named in the ticket but same bug class.
+
+**CLA-263 — malformed JSON on large digest output.** Gemini occasionally returns
+malformed JSON (unterminated strings, missing commas) once output gets large.
+`max_output_tokens` was bumped 4000→8000 on 2026-09-04 (830f51f) as a short-term
+mitigation. Added `response_mime_type="application/json"` to the Gemini
+`GenerateContentConfig` to constrain the sampler so it can't produce invalid JSON in
+the first place, and extended the existing single retry to 3 attempts with a 2s
+backoff between them.
+
 ## 2026-07-01 — Alert on digest failure
 
 `evening_generate.py` now posts `⚠️ RSS digest failed: <reason>` to #homeserver

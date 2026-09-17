@@ -274,6 +274,12 @@ def _generate_digest() -> dict:
         except Exception:
             return ""
 
+    def _strip_id_prefix(raw_id: str) -> str:
+        # Article lines are formatted "ID:{eid} | Feed:..." in the prompt below,
+        # and Gemini intermittently echoes the "ID:" label back instead of just
+        # the bare id (CLA-262) — strip it so validation against valid_ids works.
+        return raw_id[3:] if raw_id.startswith("ID:") else raw_id
+
     for e in entries[:100]:
         eid = str(e.get("id", ""))
         title = str(e.get("title", ""))[:200]
@@ -366,7 +372,15 @@ def _generate_digest() -> dict:
             resp = client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=prompt,
-                config=types.GenerateContentConfig(max_output_tokens=8000, temperature=0.2),
+                config=types.GenerateContentConfig(
+                    max_output_tokens=8000,
+                    temperature=0.2,
+                    # Constrains the sampler so it can't emit malformed JSON
+                    # (unterminated strings, missing commas) on large output
+                    # (CLA-263) — max_output_tokens=8000 alone was a mitigation,
+                    # not a fix.
+                    response_mime_type="application/json",
+                ),
             )
             raw = (resp.text or "").strip()
             if raw.startswith("```"):
@@ -376,11 +390,20 @@ def _generate_digest() -> dict:
                 raw = raw.rstrip("` \n")
             return json.loads(raw.strip())
 
-        try:
-            result = _call_gemini()
-        except json.JSONDecodeError as e:
-            print(f"[digest] Gemini JSON parse error, retrying once: {e}")
-            result = _call_gemini()
+        _MAX_GEMINI_ATTEMPTS = 3
+        result = None
+        last_json_err: json.JSONDecodeError | None = None
+        for attempt in range(1, _MAX_GEMINI_ATTEMPTS + 1):
+            try:
+                result = _call_gemini()
+                break
+            except json.JSONDecodeError as e:
+                last_json_err = e
+                print(f"[digest] Gemini JSON parse error (attempt {attempt}/{_MAX_GEMINI_ATTEMPTS}): {e}")
+                if attempt < _MAX_GEMINI_ATTEMPTS:
+                    time.sleep(2)
+        if result is None:
+            raise last_json_err
     except Exception as e:
         print(f"[digest] Gemini failed: {e}")
         return {"error": "digest_unavailable", "generated_at": None, "top_picks": [], "topics": [], "duplicates": {}}
@@ -390,14 +413,14 @@ def _generate_digest() -> dict:
     top_pick_reasons: dict[str, str] = {}
     for item in (result.get("top_picks") or [])[:3]:
         if isinstance(item, dict):
-            tid = str(item.get("id", ""))
+            tid = _strip_id_prefix(str(item.get("id", "")))
             if tid in valid_ids:
                 top_picks.append(tid)
                 reason = str(item.get("relevance_reason", ""))[:100].strip()
                 if reason:
                     top_pick_reasons[tid] = reason
         else:
-            tid = str(item)
+            tid = _strip_id_prefix(str(item))
             if tid in valid_ids:
                 top_picks.append(tid)
 
@@ -411,7 +434,7 @@ def _generate_digest() -> dict:
             raw_articles = [{"id": str(i)} for i in t["article_ids"]]
         articles = []
         for a in raw_articles[:4]:
-            aid = str(a.get("id", ""))
+            aid = _strip_id_prefix(str(a.get("id", "")))
             if aid not in valid_ids:
                 continue
             articles.append({
@@ -427,9 +450,11 @@ def _generate_digest() -> dict:
 
     duplicates = {}
     for dupe_id, info in (result.get("duplicates") or {}).items():
-        if str(dupe_id) in valid_ids and str(info.get("canonical_id", "")) in valid_ids:
-            duplicates[str(dupe_id)] = {
-                "canonical_id": str(info["canonical_id"]),
+        dupe_id = _strip_id_prefix(str(dupe_id))
+        canonical_id = _strip_id_prefix(str(info.get("canonical_id", "")))
+        if dupe_id in valid_ids and canonical_id in valid_ids:
+            duplicates[dupe_id] = {
+                "canonical_id": canonical_id,
                 "reason": str(info.get("reason", ""))[:80],
             }
 
