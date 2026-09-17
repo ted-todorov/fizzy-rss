@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-09-17 — CLA-269 follow-up: source dropdown was missing low-volume feeds
+
+Ted confirmed in the live UI that the newsletter source never appeared in the
+dropdown. Root cause: the dropdown's options were derived from `feed.title` values
+present in the currently-fetched "All" batch (`/v1/entries?limit=200`, ordered by
+recency across all ~5,879 entries system-wide). "Neo Newsletters" only has 3 Miniflux
+entries total, none recent enough to survive that top-200-across-everything cut —
+confirmed live: the batch's oldest entry was from 2 days ago, entirely dominated by
+high-volume feeds. Any other low-volume feed would have the same problem. Not a
+missing-filter or excluded-data bug — a pagination/recency cutoff silently starving
+the dropdown's option list.
+
+Fix: the dropdown now lists every subscribed feed from `/v1/feeds` (independent of
+entry recency), and selecting a source now issues a feed-scoped query
+(`/v1/entries?feed_id=<id>`) instead of client-side-filtering the generic "All"
+batch — so a low-volume feed's own entries are actually fetched and shown, not just
+listed as an option that returns nothing.
+
+Verified against the actual rendered page this time (headless Chromium via
+Playwright, not logic-only): loaded the live app, switched to the "All" tab, opened
+the source dropdown, confirmed "Neo Newsletters" is present as an option, selected
+it, and confirmed newsletter articles actually rendered in the list.
+
+Changes:
+- `frontend/index.html`: `ArticleListView` now fetches `/miniflux/v1/feeds` for the
+  dropdown's option list and switches to a `feed_id`-scoped entries query when a
+  source is selected, instead of deriving/filtering from the already-fetched batch.
+
 ## 2026-09-17 — CLA-269: Add source filter + read-state filter to the "All" tab
 
 Audited first and found one premise in the ticket didn't hold: the "All" tab's

@@ -1130,19 +1130,40 @@ function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showFilterBar, 
   const [toast, setToast] = useState(null);
   const [fetchKey, setFetchKey] = useState(0);
   const [expandTrigger, setExpandTrigger] = useState(null);
-  const [sourceFilter, setSourceFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState(""); // feed id, as a string
   const [readFilter, setReadFilter] = useState("all"); // "all" | "unread" | "read"
+  const [feedList, setFeedList] = useState([]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
+  // Feed list for the source dropdown comes from /v1/feeds (every subscribed
+  // feed) rather than being derived from the fetched entries batch — a
+  // low-volume feed (e.g. newsletters) can easily have zero entries in the
+  // most-recent-200-across-everything window the "All" list normally shows,
+  // which silently dropped it from the dropdown entirely (CLA-269 follow-up).
+  useEffect(() => {
+    if (!showFilterBar) return;
+    fetch("/miniflux/v1/feeds")
+      .then(r => r.json())
+      .then(d => setFeedList((d || []).slice().sort((a, b) => a.title.localeCompare(b.title))))
+      .catch(() => {});
+  }, [showFilterBar]);
+
+  // When a specific source is selected, fetch that feed's entries directly
+  // (feed_id-scoped query) instead of only ever filtering the generic "All"
+  // batch client-side — the same reason the dropdown needs /v1/feeds above.
+  const effectiveEndpoint = (showFilterBar && sourceFilter)
+    ? `/miniflux/v1/entries?feed_id=${encodeURIComponent(sourceFilter)}&order=published_at&direction=desc&limit=200`
+    : endpoint;
+
   useEffect(() => {
     setLoading(true);
-    fetch(endpoint)
+    fetch(effectiveEndpoint)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(d => setEntries(d.entries || []))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [endpoint, fetchKey]);
+  }, [effectiveEndpoint, fetchKey]);
 
   const effectiveDupeMap = dupeMap || {};
 
@@ -1189,13 +1210,11 @@ function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showFilterBar, 
     });
   }
 
-  const sources = showFilterBar
-    ? [...new Set(entries.map(e => e.feed?.title).filter(Boolean))].sort()
-    : [];
-
   let visible = entries.filter(e => !effectiveDupeMap[String(e.id)]);
   if (showUnreadToggle && unreadOnly) visible = visible.filter(e => !readIds.has(e.id));
-  if (showFilterBar && sourceFilter) visible = visible.filter(e => (e.feed?.title || "") === sourceFilter);
+  // Source filtering happens server-side (effectiveEndpoint, above) — a
+  // low-volume feed's entries may not exist at all in the generic "All"
+  // batch, so there's nothing to usefully re-filter client-side here.
   if (showFilterBar && readFilter === "unread") visible = visible.filter(e => !isReadFn(e));
   if (showFilterBar && readFilter === "read") visible = visible.filter(e => isReadFn(e));
 
@@ -1228,7 +1247,7 @@ function ArticleListView({ endpoint, emptyMsg, showUnreadToggle, showFilterBar, 
         <div className="view-controls">
           <select className="filter-select" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
             <option value="">All sources</option>
-            {sources.map(s => <option key={s} value={s}>{s}</option>)}
+            {feedList.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
           </select>
           <div className="read-filter-group">
             {[["all","All"],["unread","Unread"],["read","Read"]].map(([id, label]) => (
